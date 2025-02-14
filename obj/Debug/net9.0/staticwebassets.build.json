@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "dpYe34NRnXJ1lg8ofu9+d75dch+qWk1nesismXpcEwg=",
+  "Source": "B2B_API",
+  "BasePath": "_content/B2B_API",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}
