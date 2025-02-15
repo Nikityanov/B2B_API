@@ -61,5 +61,16 @@ namespace B2B_API.Repositories
         {
             return await _context.SaveChangesAsync() > 0;
         }
+
+        public async Task<(IEnumerable<T>, int)> GetPagedAsync(int page, int pageSize)
+        {
+            var totalCount = await _dbSet.CountAsync();
+            var items = await _dbSet
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
     }
-} 
+}

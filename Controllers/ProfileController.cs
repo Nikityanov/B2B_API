@@ -24,7 +24,15 @@ namespace B2B_API.Controllers
         [HttpGet]
         public async Task<ActionResult<UserProfileResponseDto>> GetProfile()
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid();
+            }
+            if (_context.Users == null)
+            {
+                return Problem("Users DbSet is null", statusCode: 500);
+            }
             var user = await _context.Users.FindAsync(userId);
 
             if (user == null)
@@ -38,7 +46,15 @@ namespace B2B_API.Controllers
         [HttpPut]
         public async Task<IActionResult> UpdateProfile(UserProfileUpdateDto updateDto)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
+            if (_context.Users == null)
+            {
+                return Problem("Users DbSet is null", statusCode: 500);
+            }
             var user = await _context.Users.FindAsync(userId);
 
             if (user == null)
@@ -66,7 +82,7 @@ namespace B2B_API.Controllers
 
         private async Task<bool> UserExists(int id)
         {
-            return await _context.Users.AnyAsync(e => e.Id == id);
+            return _context.Users == null ? false : await _context.Users.AnyAsync(e => e.Id == id);
         }
     }
 } 

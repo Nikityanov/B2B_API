@@ -22,8 +22,12 @@ namespace B2B_API.Models.DTO
         public required string SKU { get; set; }
 
         public string? Manufacturer { get; set; }
-
         public string? Unit { get; set; }
+
+        public string? ImageUrl { get; set; }
+        public ICollection<string>? ImageGallery { get; set; }
+        public string? Characteristics { get; set; }
+        public int? CategoryId { get; set; }
     }
 
     public class ProductUpdateDto
@@ -43,8 +47,12 @@ namespace B2B_API.Models.DTO
         public decimal Price { get; set; }
 
         public string? Manufacturer { get; set; }
-
         public string? Unit { get; set; }
+
+        public string? ImageUrl { get; set; }
+        public ICollection<string>? ImageGallery { get; set; }
+        public string? Characteristics { get; set; }
+        public int? CategoryId { get; set; }
     }
 
     public class ProductResponseDto
@@ -57,5 +65,10 @@ namespace B2B_API.Models.DTO
         public required string SKU { get; set; }
         public string? Manufacturer { get; set; }
         public string? Unit { get; set; }
+
+        public string? ImageUrl { get; set; }
+        public ICollection<string>? ImageGallery { get; set; }
+        public string? Characteristics { get; set; }
+        public int? CategoryId { get; set; }
     }
-} 
+}

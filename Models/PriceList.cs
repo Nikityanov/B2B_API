@@ -22,7 +22,7 @@ namespace B2B_API.Models
         public int SellerId { get; set; }
 
         [ForeignKey("SellerId")]
-        public virtual User Seller { get; set; }
+        public virtual required User Seller { get; set; }
 
         public virtual ICollection<User> AllowedBuyers { get; set; }
         public virtual ICollection<PriceListProduct> Products { get; set; }
@@ -30,8 +30,14 @@ namespace B2B_API.Models
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
-    }
 
+        [MaxLength(1000)]
+        public string? Description { get; set; }
+
+        public string? PriceListType { get; set; } // Тип прайс-листа (например, "Оптовый", "Розница", "Специальный")
+        public string? Currency { get; set; } = "BYN"; // Валюта прайс-листа, по умолчанию - BYN
+    }
+    
     public class PriceListProduct
     {
         public int PriceListId { get; set; }

@@ -34,5 +34,13 @@ namespace B2B_API.Models
         public string? Unit { get; set; }  // Единица измерения
 
         public virtual ICollection<PriceList> PriceLists { get; set; }
+
+        public string? ImageUrl { get; set; }
+        public virtual ICollection<string> ImageGallery { get; set; } = new HashSet<string>();
+
+        public string? Characteristics { get; set; } // JSON or XML for product characteristics
+
+        public int? CategoryId { get; set; } // Foreign key for Category
+        public virtual Category? Category { get; set; } // Navigation property for Category
     }
 }

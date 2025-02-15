@@ -20,9 +20,16 @@ namespace B2B_API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetProducts()
+        public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetProducts(int? categoryId)
         {
-            var products = await _repository.GetAllAsync();
+            var query = _repository.GetAllAsync().Result.AsQueryable();
+
+            if (categoryId.HasValue)
+            {
+                query = query.Where(p => p.CategoryId == categoryId.Value);
+            }
+
+            var products = await Task.FromResult(query.ToList());
             return Ok(products.Select(p => p.ToDto()));
         }
 
@@ -88,5 +95,103 @@ namespace B2B_API.Controllers
 
             return NoContent();
         }
+
+        [HttpPost("{id}/images")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> AddImageToProduct(int id, [FromBody] string imageUrl)
+        {
+            var product = await _repository.GetByIdAsync(id);
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrEmpty(imageUrl))
+            {
+                return BadRequest("Image URL is required");
+            }
+
+            if (product.ImageGallery == null)
+            {
+                product.ImageGallery = new List<string>();
+            }
+
+            product.ImageGallery.Add(imageUrl);
+            _repository.Update(product);
+            await _repository.SaveChangesAsync();
+
+            return Ok("Image added successfully");
+        }
+
+        [HttpDelete("{id}/images")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> RemoveImageFromProduct(int id, [FromBody] string imageUrl)
+        {
+            var product = await _repository.GetByIdAsync(id);
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrEmpty(imageUrl))
+            {
+                return BadRequest("Image URL is required");
+            }
+
+            if (product.ImageGallery == null || !product.ImageGallery.Contains(imageUrl))
+            {
+                return NotFound("Image URL not found in product gallery");
+            }
+
+            product.ImageGallery.Remove(imageUrl);
+            _repository.Update(product);
+            await _repository.SaveChangesAsync();
+
+            return Ok("Image removed successfully");
+        }
+
+        [HttpPut("{id}/image")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> UpdateProductImage(int id, [FromBody] string imageUrl)
+        {
+            var product = await _repository.GetByIdAsync(id);
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrEmpty(imageUrl))
+            {
+                return BadRequest("Image URL is required");
+            }
+
+            product.ImageUrl = imageUrl;
+            _repository.Update(product);
+            await _repository.SaveChangesAsync();
+
+            return Ok("Product image updated successfully");
+        }
+
+        [HttpPut("{id}/characteristics")]
+        [Authorize(Roles = "Seller")]
+        public async Task<IActionResult> UpdateProductCharacteristics(int id, [FromBody] string characteristics)
+        {
+            var product = await _repository.GetByIdAsync(id);
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            if (string.IsNullOrEmpty(characteristics))
+            {
+                return BadRequest("Product characteristics are required");
+            }
+
+            product.Characteristics = characteristics;
+            _repository.Update(product);
+            await _repository.SaveChangesAsync();
+
+            return Ok("Product characteristics updated successfully");
+        }
     }
-} 
+}

@@ -13,5 +13,6 @@ namespace B2B_API.Interfaces
         void Remove(T entity);
         void RemoveRange(IEnumerable<T> entities);
         Task<bool> SaveChangesAsync();
+        Task<(IEnumerable<T>, int)> GetPagedAsync(int page, int pageSize);
     }
-} 
+}

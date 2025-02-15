@@ -64,5 +64,6 @@ namespace B2B_API.Models
 
         [MaxLength(12)]
         public string? INN { get; set; }
+        public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
     }
 }

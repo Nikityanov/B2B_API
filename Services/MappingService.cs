@@ -2,7 +2,7 @@ using B2B_API.Models;
 using B2B_API.Models.DTO;
 
 namespace B2B_API.Services
-{
+{    
     public static class MappingService
     {
         public static Product ToEntity(this ProductCreateDto dto)
@@ -14,19 +14,27 @@ namespace B2B_API.Services
                 StockQuantity = dto.StockQuantity,
                 Price = dto.Price,
                 SKU = dto.SKU,
-                Manufacturer = dto.Manufacturer,
-                Unit = dto.Unit
+                Manufacturer = dto.Manufacturer ?? string.Empty,
+                Unit = dto.Unit ?? string.Empty,
+                ImageUrl = dto.ImageUrl ?? string.Empty,
+                ImageGallery = dto.ImageGallery ?? new List<string>(),
+                Characteristics = dto.Characteristics,
+                CategoryId = dto.CategoryId
             };
         }
 
         public static void UpdateFromDto(this Product entity, ProductUpdateDto dto)
         {
             entity.Name = dto.Name;
-            entity.Description = dto.Description;
+            entity.Description = dto.Description ?? string.Empty;
             entity.StockQuantity = dto.StockQuantity;
             entity.Price = dto.Price;
-            entity.Manufacturer = dto.Manufacturer;
-            entity.Unit = dto.Unit;
+            entity.Manufacturer = dto.Manufacturer ?? string.Empty;
+            entity.Unit = dto.Unit ?? string.Empty;
+            entity.ImageUrl = dto.ImageUrl ?? string.Empty;
+            entity.ImageGallery = dto.ImageGallery ?? new List<string>();
+            entity.Characteristics = dto.Characteristics;
+            entity.CategoryId = dto.CategoryId;
         }
 
         public static ProductResponseDto ToDto(this Product entity)
@@ -40,36 +48,37 @@ namespace B2B_API.Services
                 Price = entity.Price,
                 SKU = entity.SKU,
                 Manufacturer = entity.Manufacturer,
-                Unit = entity.Unit
+                Unit = entity.Unit,
+                ImageUrl = entity.ImageUrl,
+                ImageGallery = entity.ImageGallery,
+                Characteristics = entity.Characteristics,
+                CategoryId = entity.CategoryId
             };
         }
 
-        public static PriceList ToEntity(this PriceListCreateDto dto, int sellerId)
-        {
-            return new PriceList
-            {
-                Name = dto.Name,
-                SellerId = sellerId,
-                // Seller = new User { // Удаление временного пользователя
-                //     Id = sellerId,
-                //     Name = "Temp",
-                //     UNP = "000000000",
-                //     LegalAddress = "Temp",
-                //     ActualAddress = "Temp",
-                //     Email = "temp@example.com",
-                //     Phone = "0",
-                //     PasswordHash = Array.Empty<byte>(),
-                // }, // Временные значения для required свойств - УДАЛЕНО
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-        }
-
+        
+                public static PriceList ToEntity(this PriceListCreateDto dto, int sellerId, User seller)
+                {
+                    return new PriceList
+                    {
+                        Name = dto.Name,
+                        SellerId = sellerId,
+                        Seller = seller,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        Description = dto.Description,
+                        PriceListType = dto.PriceListType,
+                        Currency = dto.Currency ?? "BYN"
+                    };
+                }
         public static void UpdateFromDto(this PriceList entity, PriceListUpdateDto dto)
         {
             entity.Name = dto.Name;
             entity.IsActive = dto.IsActive;
             entity.UpdatedAt = DateTime.UtcNow;
+            entity.Description = dto.Description;
+            entity.PriceListType = dto.PriceListType;
+            entity.Currency = dto.Currency;
         }
 
         public static PriceListResponseDto ToDto(this PriceList entity)
@@ -83,6 +92,9 @@ namespace B2B_API.Services
                 IsActive = entity.IsActive,
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = entity.UpdatedAt,
+                Description = entity.Description,
+                PriceListType = entity.PriceListType,
+                Currency = entity.Currency,
                 Products = entity.Products?.Select(p => new PriceListProductResponseDto
                 {
                     ProductId = p.ProductId,
@@ -93,6 +105,34 @@ namespace B2B_API.Services
                 }).ToList() ?? new List<PriceListProductResponseDto>(),
                 AllowedBuyers = entity.AllowedBuyers?.Select(b => b.ToShortInfoDto()).ToList() ?? new List<UserShortInfoDto>()
             };
+        }
+
+        public static CategoryResponseDto ToDto(this Category entity)
+        {
+            return new CategoryResponseDto
+            {
+                Id = entity.Id,
+                Name = entity.Name,
+                Description = entity.Description,
+                ImageUrl = entity.ImageUrl
+            };
+        }
+
+        public static Category ToEntity(this CategoryCreateDto dto)
+        {
+            return new Category
+            {
+                Name = dto.Name,
+                Description = dto.Description,
+                ImageUrl = dto.ImageUrl
+            };
+        }
+
+        public static void UpdateFromDto(this Category entity, CategoryUpdateDto dto)
+        {
+            entity.Name = dto.Name;
+            entity.Description = dto.Description;
+            entity.ImageUrl = dto.ImageUrl;
         }
 
         public static UserShortInfoDto ToShortInfoDto(this User entity)
@@ -129,7 +169,7 @@ namespace B2B_API.Services
                 Name = entity.Name,
                 UserType = entity.UserType,
                 UserRole = entity.UserRole,
-                INN = entity.INN,
+                INN = entity.INN ?? "",
                 OKPO = entity.OKPO,
                 UNP = entity.UNP,
                 LegalAddress = entity.LegalAddress,
@@ -157,4 +197,4 @@ namespace B2B_API.Services
                    user.Phone != "Не указано";
         }
     }
-} 
+}

@@ -27,12 +27,25 @@ namespace B2B_API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<PriceListResponseDto>>> GetPriceLists()
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            var userRoleClaim = User.FindFirst(ClaimTypes.Role);
 
-            var query = _context.PriceLists
+            // int userId = 0; // Duplicate declaration removed
+            string? userRole = userRoleClaim?.Value;
+
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
+
+            var priceListsDbSet = _context.PriceLists;
+            if (priceListsDbSet == null)
+            {
+                return Ok(new List<PriceListResponseDto>()); // Return empty list if PriceLists is null
+            }
+            var query = priceListsDbSet
                 .Include(p => p.Seller)
-                .Include(p => p.AllowedBuyers)
+                .Include(p => p.AllowedBuyers) // Возможно, здесь была проблема с null
                 .Include(p => p.Products)
                     .ThenInclude(pp => pp.Product)
                 .AsQueryable();
@@ -53,9 +66,22 @@ namespace B2B_API.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<PriceListResponseDto>> GetPriceList(int id)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            var userRoleClaim = User.FindFirst(ClaimTypes.Role);
 
+            // int userId = 0; // Duplicate declaration removed
+            string? userRole = userRoleClaim?.Value;
+
+
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
+
+            if (_context.PriceLists == null)
+            {
+                return NotFound("PriceLists DbSet is null"); // Handle null PriceLists DbSet
+            }
             var priceList = await _context.PriceLists
                 .Include(p => p.Seller)
                 .Include(p => p.AllowedBuyers)
@@ -84,20 +110,45 @@ namespace B2B_API.Controllers
         [Authorize(Roles = "Seller")]
         public async Task<ActionResult<PriceListResponseDto>> CreatePriceList(PriceListCreateDto createDto)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var priceList = createDto.ToEntity(userId);
-            priceList.SellerId = userId;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
+
+            if (_context.Users == null)
+            {
+                return Problem("Users DbSet is null", statusCode: 500);
+            }
+            var seller = await _context.Users.FindAsync(userId);
+            if (seller == null)
+            {
+                return NotFound("Seller not found"); // Продавец не найден
+            }
+
+            // Corrected ToEntity call with positional arguments:
+            var priceList = createDto.ToEntity(userId, seller);
+            // priceList.SellerId = userId; // redundant, but harmless
 
             await _repository.AddAsync(priceList);
             await _repository.SaveChangesAsync();
 
             // Загружаем связанные данные для ответа
+            if (_context.PriceLists == null)
+            {
+                return Problem("PriceLists DbSet is null", statusCode: 500);
+            }
             priceList = await _context.PriceLists
                 .Include(p => p.Seller)
                 .Include(p => p.AllowedBuyers)
                 .Include(p => p.Products)
-                    .ThenInclude(pp => pp.Product)
+                .ThenInclude(pp => pp.Product)
                 .FirstOrDefaultAsync(p => p.Id == priceList.Id);
+
+            if (priceList == null)
+            {
+                return Problem("Price list creation failed", statusCode: 500); // Или BadRequest, в зависимости от логики
+            }
 
             return CreatedAtAction(
                 nameof(GetPriceList),
@@ -109,7 +160,16 @@ namespace B2B_API.Controllers
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> UpdatePriceList(int id, PriceListUpdateDto updateDto)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
             var priceList = await _repository.GetByIdAsync(id);
 
             if (priceList == null)
@@ -122,7 +182,8 @@ namespace B2B_API.Controllers
                 return Forbid();
             }
 
-            priceList.UpdateFromDto(updateDto);
+            priceList.UpdateFromDto(updateDto); // Update existing fields
+
             _repository.Update(priceList);
             await _repository.SaveChangesAsync();
 
@@ -133,7 +194,11 @@ namespace B2B_API.Controllers
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> DeletePriceList(int id)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
             var priceList = await _repository.GetByIdAsync(id);
 
             if (priceList == null)
@@ -156,21 +221,45 @@ namespace B2B_API.Controllers
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> AddProductToPriceList(int id, PriceListProductCreateDto createDto)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
+        
+            if (_context.PriceListProducts == null)
+            {
+                return Problem("PriceListProducts DbSet is null", statusCode: 500);
+            }
             var priceList = await _repository.GetByIdAsync(id);
-            
             if (priceList == null || priceList.SellerId != userId)
             {
                 return Forbid();
+            }
+
+            if (_context.Products == null)
+            {
+                return Problem("Products DbSet is null", statusCode: 500);
+            }
+            var product = await _context.Products.FindAsync(createDto.ProductId);
+            if (product == null)
+            {
+                return NotFound("Product not found");
             }
 
             var priceListProduct = new PriceListProduct
             {
                 PriceListId = id,
                 ProductId = createDto.ProductId,
-                SpecialPrice = createDto.SpecialPrice
+                SpecialPrice = createDto.SpecialPrice,
+                PriceList = priceList, // Assign PriceList entity
+                Product = product      // Assign Product entity
             };
 
+            if (_context.PriceListProducts == null)
+            {
+                return Problem("PriceListProducts DbSet is null", statusCode: 500);
+            }
             await _context.PriceListProducts.AddAsync(priceListProduct);
             await _context.SaveChangesAsync();
 
@@ -181,7 +270,11 @@ namespace B2B_API.Controllers
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> RemoveProductFromPriceList(int id, int productId)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
             var priceList = await _repository.GetByIdAsync(id);
             
             if (priceList == null || priceList.SellerId != userId)
@@ -189,9 +282,17 @@ namespace B2B_API.Controllers
                 return Forbid();
             }
 
-            var priceListProduct = await _context.PriceListProducts
-                .FirstOrDefaultAsync(p => p.PriceListId == id && p.ProductId == productId);
-
+            if (_context.PriceListProducts == null)
+            {
+                return Problem("PriceListProducts DbSet is null", statusCode: 500);
+            }
+            
+                        if (_context.PriceListProducts == null)
+                        {
+                            return Problem("PriceListProducts DbSet is null", statusCode: 500);
+                        }
+                        var priceListProduct = await _context.PriceListProducts
+                            .FirstOrDefaultAsync(p => p.PriceListId == id && p.ProductId == productId);
             if (priceListProduct == null)
             {
                 return NotFound();
@@ -207,7 +308,15 @@ namespace B2B_API.Controllers
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> AddBuyerToPriceList(int id, int buyerId)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
+            if (_context.PriceLists == null)
+            {
+                return Problem("PriceLists DbSet is null", statusCode: 500);
+            }
             var priceList = await _context.PriceLists
                 .Include(p => p.AllowedBuyers)
                 .FirstOrDefaultAsync(p => p.Id == id);
@@ -222,6 +331,10 @@ namespace B2B_API.Controllers
                 return Forbid();
             }
 
+            if (_context.Users == null)
+            {
+                return Problem("Users DbSet is null", statusCode: 500);
+            }
             var buyer = await _context.Users.FindAsync(buyerId);
             if (buyer == null)
             {
@@ -238,7 +351,15 @@ namespace B2B_API.Controllers
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> RemoveBuyerFromPriceList(int id, int buyerId)
         {
-            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid(); // Или BadRequest("Invalid user ID");
+            }
+            if (_context.PriceLists == null)
+            {
+                return Problem("PriceLists DbSet is null", statusCode: 500);
+            }
             var priceList = await _context.PriceLists
                 .Include(p => p.AllowedBuyers)
                 .FirstOrDefaultAsync(p => p.Id == id);
@@ -265,4 +386,4 @@ namespace B2B_API.Controllers
             return NoContent();
         }
     }
-} 
+}

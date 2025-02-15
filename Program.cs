@@ -117,19 +117,19 @@ namespace B2B_API
                 }, "SecretKey должен быть минимум 32 символа")
                 .ValidateOnStart();
 
-            // Добавляем валидацию конфигурации JWT
-            builder.Services.AddOptions<JwtSettings>()
-                .Bind(builder.Configuration.GetSection("JwtSettings"))
-                .ValidateDataAnnotations()
-                .Validate(jwt =>
-                {
-                    if (string.IsNullOrEmpty(jwt.SecretKey))
-                        return false;
-                    if (jwt.SecretKey.Length < 32)
-                        return false;
-                    return true;
-                }, "SecretKey должен быть минимум 32 символа")
-                .ValidateOnStart();
+            
+
+
+
+
+
+
+
+
+
+
+
+                
 
             var app = builder.Build();
 
@@ -159,9 +159,9 @@ namespace B2B_API
                 context.Database.EnsureCreated();
 
                 // Вывод количества записей в базе данных
-                var priceListsCount = context.PriceLists.Count();
-                var productsCount = context.Products.Count();
-                var usersCount = context.Users.Count();
+                var priceListsCount = context.PriceLists?.Count() ?? 0;
+                var productsCount = context.Products?.Count() ?? 0;
+                var usersCount = context.Users?.Count() ?? 0;
 
                 Console.WriteLine($"Количество прайс-листов: {priceListsCount}");
                 Console.WriteLine($"Количество продуктов: {productsCount}");
@@ -180,6 +180,11 @@ namespace B2B_API
             // Обновленный порядок с учетом переменных окружения
             var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
                 ?? builder.Configuration["JwtSettings:SecretKey"];
+
+            if (secretKey == null)
+            {
+                throw new InvalidOperationException("JWT secret key is not configured.");
+            }
 
             JwtHelper.ValidateSecretKeyLength(secretKey); // Вызываем функцию валидации через класс JwtHelper
 

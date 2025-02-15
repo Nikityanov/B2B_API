@@ -10,10 +10,12 @@ namespace B2B_API.Data
         {
         }
 
-        public DbSet<User> Users { get; set; }
-        public DbSet<Product> Products { get; set; }
-        public DbSet<PriceList> PriceLists { get; set; }
-        public DbSet<PriceListProduct> PriceListProducts { get; set; }
+        public DbSet<User>? Users { get; set; }
+        public DbSet<Product>? Products { get; set; }
+        public DbSet<PriceList>? PriceLists { get; set; }
+        public DbSet<PriceListProduct>? PriceListProducts { get; set; }
+        public DbSet<Order>? Orders { get; set; } // Добавлено DbSet для Order
+        public DbSet<OrderItem>? OrderItems { get; set; } // Добавлено DbSet для OrderItem
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -45,6 +47,27 @@ namespace B2B_API.Data
                 .HasOne(plp => plp.Product)
                 .WithMany()
                 .HasForeignKey(plp => plp.ProductId);
+
+            // Настройка связи один-ко-многим между User и Order
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Customer)
+                .WithMany(u => u.Orders)
+                .HasForeignKey(o => o.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Настройка связи один-ко-многим между Order и OrderItem
+            modelBuilder.Entity<OrderItem>()
+                .HasOne(oi => oi.Order)
+                .WithMany(o => o.OrderItems)
+                .HasForeignKey(oi => oi.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Настройка связи один-ко-многим между Product и OrderItem
+            modelBuilder.Entity<OrderItem>()
+                .HasOne(oi => oi.Product)
+                .WithMany()
+                .HasForeignKey(oi => oi.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
-} 
+}
