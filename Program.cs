@@ -43,6 +43,7 @@ namespace B2B_API
             // Регистрируем репозитории и сервисы
             builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
             builder.Services.AddScoped<JwtService>();
+            builder.Services.AddScoped<CategoryService>();
 
             // Настройка аутентификации
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
