@@ -25,7 +25,7 @@ namespace B2B_API.Models.DTO
         public string? Unit { get; set; }
 
         public string? ImageUrl { get; set; }
-        public ICollection<string>? ImageGallery { get; set; }
+        public IList<string>? ImageGallery { get; set; }
         public string? Characteristics { get; set; }
         public int? CategoryId { get; set; }
     }
@@ -50,7 +50,7 @@ namespace B2B_API.Models.DTO
         public string? Unit { get; set; }
 
         public string? ImageUrl { get; set; }
-        public ICollection<string>? ImageGallery { get; set; }
+        public IList<string>? ImageGallery { get; set; }
         public string? Characteristics { get; set; }
         public int? CategoryId { get; set; }
     }
@@ -67,7 +67,7 @@ namespace B2B_API.Models.DTO
         public string? Unit { get; set; }
 
         public string? ImageUrl { get; set; }
-        public ICollection<string>? ImageGallery { get; set; }
+        public IList<string>? ImageGallery { get; set; }
         public string? Characteristics { get; set; }
         public int? CategoryId { get; set; }
     }

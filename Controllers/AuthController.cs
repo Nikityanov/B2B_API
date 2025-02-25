@@ -6,6 +6,7 @@ using B2B_API.Models;
 using B2B_API.Models.Auth;
 using B2B_API.Services;
 using B2B_API.Data;
+using B2B_API.Models.Enums;
 
 namespace B2B_API.Controllers
 {
@@ -25,7 +26,7 @@ namespace B2B_API.Controllers
         [HttpPost("register")]
         public async Task<ActionResult<User>> Register(RegisterModel model)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == model.Email))
+            if (_context.Users != null && await _context.Users.AnyAsync(u => u.Email == model.Email))
             {
                 return BadRequest("Email already exists");
             }
@@ -34,7 +35,7 @@ namespace B2B_API.Controllers
             var user = new User
             {
                 Email = model.Email,
-                UserRole = model.UserRole,
+                UserRole = model.UserType == UserType.Individual ? UserRole.Seller : UserRole.Buyer,
                 UserType = model.UserType,
                 Name = "Не указано",  // Временное значение
                 INN = "000000000000", // Временное значение
@@ -72,7 +73,7 @@ namespace B2B_API.Controllers
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(LoginModel loginModel)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginModel.Email);
+            var user = await _context.Users?.FirstOrDefaultAsync(u => u.Email == loginModel.Email);
             if (user == null)
             {
                 return Unauthorized("Неверный email или пароль");
@@ -117,4 +118,4 @@ namespace B2B_API.Controllers
                    user.Phone != "Не указано";
         }
     }
-} 
+}

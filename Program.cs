@@ -118,19 +118,8 @@ namespace B2B_API
                 }, "SecretKey должен быть минимум 32 символа")
                 .ValidateOnStart();
 
-            
-
-
-
-
-
-
-
-
-
-
-
-                
+            // Добавляем CORS
+            builder.Services.AddCors();
 
             var app = builder.Build();
 
@@ -145,6 +134,14 @@ namespace B2B_API
             }
 
             app.UseHttpsRedirection();
+
+            // Настройка CORS
+            app.UseCors(builder => builder
+                .WithOrigins("http://localhost:3000") // Разрешить запросы с frontend домена
+                .AllowAnyMethod() // Разрешить все методы (GET, POST, PUT, DELETE и т.д.)
+                .AllowAnyHeader() // Разрешить все заголовки
+                .AllowCredentials() // Разрешить передачу учетных данных
+                );
 
             // Добавляем middleware аутентификации и авторизации
             app.UseAuthentication();

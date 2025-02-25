@@ -36,7 +36,7 @@ namespace B2B_API.Models
         public virtual ICollection<PriceList> PriceLists { get; set; }
 
         public string? ImageUrl { get; set; }
-        public virtual ICollection<string> ImageGallery { get; set; } = new HashSet<string>();
+        public virtual IList<string> ImageGallery { get; set; } = new List<string>();
 
         public string? Characteristics { get; set; } // JSON or XML for product characteristics
 

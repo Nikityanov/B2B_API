@@ -63,6 +63,7 @@ namespace B2B_API.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")] // Добавляем авторизацию по роли "Admin"
         public async Task<IActionResult> DeleteUser(int id)
         {
             var user = await _repository.GetByIdAsync(id);
