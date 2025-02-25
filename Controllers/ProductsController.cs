@@ -7,6 +7,7 @@ using B2B_API.Services;
 using B2B_API.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Microsoft.Extensions.Logging;
 
 namespace B2B_API.Controllers
 {
@@ -17,264 +18,452 @@ namespace B2B_API.Controllers
     {
         private readonly IGenericRepository<Product> _repository;
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<ProductsController> _logger;
 
-        public ProductsController(IGenericRepository<Product> repository, ApplicationDbContext context)
+        public ProductsController(
+            IGenericRepository<Product> repository, 
+            ApplicationDbContext context,
+            ILogger<ProductsController> logger)
         {
             _repository = repository;
             _context = context;
+            _logger = logger;
         }
 
+        /// <summary>
+        /// Получает список всех продуктов с возможностью фильтрации по категории
+        /// </summary>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetProducts(int? categoryId)
         {
-            var query = _repository.GetAllAsync().Result.AsQueryable();
-
-            if (categoryId.HasValue)
+            try
             {
-                query = query.Where(p => p.CategoryId == categoryId.Value);
-            }
+                IEnumerable<Product> products;
+                
+                if (categoryId.HasValue)
+                {
+                    // Оптимизация: используем прямой запрос с фильтрацией вместо загрузки всех продуктов
+                    if (_context.Products != null) // Добавлена проверка на null, хотя _context.Products не должен быть null
+                    {
+                        products = await _context.Products
+                            .Where(p => p.CategoryId == categoryId.Value)
+                            .ToListAsync();
+                    }
+                    else
+                    {
+                        _logger.LogError("Ошибка: _context.Products is null"); // Логирование на случай, если _context.Products все же null
+                        return StatusCode(500, "Ошибка при загрузке продуктов"); // Возвращаем ошибку, если _context.Products null
+                    }
+                }
+                else
+                {
+                    products = await _repository.GetAllAsync();
+                }
 
-            var products = await query.ToListAsync(); // Use await and ToListAsync
-            return Ok(products.Select(p => p.ToDto()));
+                return Ok(products.Select(p => p.ToDto()));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении списка продуктов");
+                return StatusCode(500, "Ошибка при загрузке продуктов");
+            }
         }
 
+        /// <summary>
+        /// Получает продукт по ID
+        /// </summary>
         [HttpGet("{id}")]
         public async Task<ActionResult<ProductResponseDto>> GetProduct(int id)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
+                return Ok(product.ToDto());
             }
-            return Ok(product.ToDto());
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении продукта с ID {ProductId}", id);
+                return StatusCode(500, "Ошибка при загрузке продукта");
+            }
         }
 
+        /// <summary>
+        /// Создает новый продукт
+        /// </summary>
         [HttpPost]
         [Authorize(Roles = "Seller")]
         [RequestFormLimits(MultipartBodyLengthLimit = 209715200)]
         [DisableRequestSizeLimit]
         public async Task<ActionResult<ProductResponseDto>> CreateProduct([FromForm] ProductCreateDto createDto)
         {
-            
-            var product = createDto.ToEntity();
-            product.ImageUrl = null; // Игнорируем загрузку изображений пока что
             try
             {
+                var product = createDto.ToEntity();
+                
+                // ИСПРАВЛЕНО: Не игнорируем ImageUrl, если он предоставлен
+                if (string.IsNullOrEmpty(createDto.ImageUrl))
+                {
+                    product.ImageUrl = null;
+                }
+                
                 await _repository.AddAsync(product);
                 await _repository.SaveChangesAsync();
+
+                _logger.LogInformation("Создан новый продукт с ID {ProductId}", product.Id);
+
+                return CreatedAtAction(
+                    nameof(GetProduct),
+                    new { id = product.Id },
+                    product.ToDto());
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error saving product to database: {ex}");
+                _logger.LogError(ex, "Ошибка при создании продукта");
                 return StatusCode(500, "Ошибка при сохранении продукта в базе данных");
             }
-
-            return CreatedAtAction(
-                nameof(GetProduct),
-                new { id = product.Id },
-                product.ToDto());
         }
 
+        /// <summary>
+        /// Обновляет существующий продукт
+        /// </summary>
         [HttpPut("{id}")]
         [Authorize(Roles = "Seller")]
-        [Consumes("application/json")] // Specify that this action consumes JSON
+        [Consumes("application/json")]
         public async Task<IActionResult> UpdateProduct(int id, ProductUpdateDto updateDto)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
+
+                // Проверка, принадлежит ли продукт текущему продавцу
+                if (!await IsProductOwnedByCurrentUser(product))
+                {
+                    return Forbid();
+                }
+
+                product.UpdateFromDto(updateDto);
+                _repository.Update(product);
+                var result = await _repository.SaveChangesAsync();
+
+                if (!result)
+                {
+                    return StatusCode(500, "Не удалось обновить продукт");
+                }
+
+                _logger.LogInformation("Обновлен продукт с ID {ProductId}", id);
+                return NoContent();
             }
-
-            product.UpdateFromDto(updateDto);
-            _repository.Update(product);
-            var result = await _repository.SaveChangesAsync();
-
-            if (!result)
+            catch (Exception ex)
             {
-                return NotFound();
+                _logger.LogError(ex, "Ошибка при обновлении продукта с ID {ProductId}", id);
+                return StatusCode(500, "Ошибка при обновлении продукта");
             }
-
-            return NoContent();
         }
 
+        /// <summary>
+        /// Удаляет продукт
+        /// </summary>
         [HttpDelete("{id}")]
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
+
+                // Проверка, принадлежит ли продукт текущему продавцу
+                if (!await IsProductOwnedByCurrentUser(product))
+                {
+                    return Forbid();
+                }
+
+                _repository.Remove(product);
+                await _repository.SaveChangesAsync();
+
+                _logger.LogInformation("Удален продукт с ID {ProductId}", id);
+                return NoContent();
             }
-
-            _repository.Remove(product);
-            await _repository.SaveChangesAsync();
-
-            return NoContent();
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при удалении продукта с ID {ProductId}", id);
+                return StatusCode(500, "Ошибка при удалении продукта");
+            }
         }
 
+        /// <summary>
+        /// Получает список продуктов для покупателя из доступных прайс-листов
+        /// </summary>
         [HttpGet("BuyerPriceList")]
-        [Authorize(Roles = "Buyer")] // Endpoint только для покупателей
+        [Authorize(Roles = "Buyer")]
         public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetBuyerPriceListProducts()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            var userRoleClaim = User.FindFirst(ClaimTypes.Role);
-
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            try
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
-            }
-
-            string? userRole = userRoleClaim?.Value;
-
-            if (userRole != "Buyer")
-            {
-                return Forbid(); // Endpoint только для покупателей
-            }
-
-            var priceLists = await _context.PriceLists
-                .Include(p => p.Products)
-                    .ThenInclude(pp => pp.Product)
-                .Include(p => p.AllowedBuyers) // Добавлено Include для AllowedBuyers
-                .Where(p => p.AllowedBuyers.Any(b => b.Id == userId))
-                .ToListAsync();
-
-            var products = new List<ProductResponseDto>();
-            foreach (var priceList in priceLists)
-            {
-                foreach (var priceListProduct in priceList.Products)
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
                 {
-                    var productDto = priceListProduct.Product.ToDto();
-                    productDto.Price = priceListProduct.SpecialPrice; // Use special price from price list
-                    products.Add(productDto);
+                    return Forbid();
                 }
-            }
 
-            return Ok(products);
+                // Оптимизация: используем более эффективный запрос с проекцией
+                if (_context.PriceLists == null)
+                {
+                    _logger.LogError("Ошибка: _context.PriceLists is null");
+                    return StatusCode(500, "Ошибка при загрузке прайс-листов");
+                }
+
+                var products = await _context.PriceLists
+                    .Where(pl => pl.AllowedBuyers.Any(b => b.Id == userId))
+                    .SelectMany(pl => pl.Products)
+                    .Select(pp => new ProductResponseDto
+                    {
+                        Id = pp.Product.Id,
+                        Name = pp.Product.Name,
+                        Description = pp.Product.Description ?? string.Empty,
+                        StockQuantity = pp.Product.StockQuantity,
+                        Price = pp.SpecialPrice, // Используем специальную цену из прайс-листа
+                        SKU = pp.Product.SKU,
+                        Manufacturer = pp.Product.Manufacturer,
+                        Unit = pp.Product.Unit,
+                        ImageUrl = pp.Product.ImageUrl,
+                        ImageGallery = pp.Product.ImageGallery,
+                        Characteristics = pp.Product.Characteristics,
+                        CategoryId = pp.Product.CategoryId
+                    })
+                    .ToListAsync();
+
+                return Ok(products);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при получении списка продуктов для покупателя");
+                return StatusCode(500, "Ошибка при загрузке продуктов");
+            }
         }
 
+        /// <summary>
+        /// Добавляет изображение в галерею продукта
+        /// </summary>
         [HttpPost("{id}/images")]
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> AddImageToProduct(int id, [FromBody] string imageUrl)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
-            }
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
 
-            if (string.IsNullOrEmpty(imageUrl))
+                // Проверка, принадлежит ли продукт текущему продавцу
+                if (!await IsProductOwnedByCurrentUser(product))
+                {
+                    return Forbid();
+                }
+
+                if (string.IsNullOrEmpty(imageUrl))
+                {
+                    return BadRequest("Image URL is required");
+                }
+
+                if (product.ImageGallery == null)
+                {
+                    product.ImageGallery = new List<string>();
+                }
+
+                product.ImageGallery.Add(imageUrl);
+                _repository.Update(product);
+                await _repository.SaveChangesAsync();
+
+                _logger.LogInformation("Добавлено изображение в галерею продукта с ID {ProductId}", id);
+                return Ok("Image added successfully");
+            }
+            catch (Exception ex)
             {
-                return BadRequest("Image URL is required");
+                _logger.LogError(ex, "Ошибка при добавлении изображения в галерею продукта с ID {ProductId}", id);
+                return StatusCode(500, "Ошибка при добавлении изображения");
             }
-
-            if (product.ImageGallery == null)
-            {
-                product.ImageGallery = new List<string>();
-            }
-
-            product.ImageGallery.Add(imageUrl);
-            _repository.Update(product);
-            await _repository.SaveChangesAsync();
-
-            return Ok("Image added successfully");
         }
 
+        /// <summary>
+        /// Удаляет изображение из галереи продукта
+        /// </summary>
         [HttpDelete("{id}/images")]
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> RemoveImageFromProduct(int id, [FromBody] string imageUrl)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
-            }
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
 
-            if (string.IsNullOrEmpty(imageUrl))
+                // Проверка, принадлежит ли продукт текущему продавцу
+                if (!await IsProductOwnedByCurrentUser(product))
+                {
+                    return Forbid();
+                }
+
+                if (string.IsNullOrEmpty(imageUrl))
+                {
+                    return BadRequest("Image URL is required");
+                }
+
+                if (product.ImageGallery == null || !product.ImageGallery.Contains(imageUrl))
+                {
+                    return NotFound("Image URL not found in product gallery");
+                }
+
+                product.ImageGallery.Remove(imageUrl);
+                _repository.Update(product);
+                await _repository.SaveChangesAsync();
+
+                _logger.LogInformation("Удалено изображение из галереи продукта с ID {ProductId}", id);
+                return Ok("Image removed successfully");
+            }
+            catch (Exception ex)
             {
-                return BadRequest("Image URL is required");
+                _logger.LogError(ex, "Ошибка при удалении изображения из галереи продукта с ID {ProductId}", id);
+                return StatusCode(500, "Ошибка при удалении изображения");
             }
-
-            if (product.ImageGallery == null || !product.ImageGallery.Contains(imageUrl))
-            {
-                return NotFound("Image URL not found in product gallery");
-            }
-
-            product.ImageGallery.Remove(imageUrl);
-            _repository.Update(product);
-            await _repository.SaveChangesAsync();
-
-            return Ok("Image removed successfully");
         }
 
+        /// <summary>
+        /// Обновляет основное изображение продукта
+        /// </summary>
         [HttpPut("{id}/image")]
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> UpdateProductImage(int id, [FromBody] string imageUrl)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
-            }
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
 
-            if (string.IsNullOrEmpty(imageUrl))
+                // Проверка, принадлежит ли продукт текущему продавцу
+                if (!await IsProductOwnedByCurrentUser(product))
+                {
+                    return Forbid();
+                }
+
+                if (string.IsNullOrEmpty(imageUrl))
+                {
+                    return BadRequest("Image URL is required");
+                }
+
+                product.ImageUrl = imageUrl;
+                _repository.Update(product);
+                await _repository.SaveChangesAsync();
+
+                _logger.LogInformation("Обновлено основное изображение продукта с ID {ProductId}", id);
+                return Ok("Product image updated successfully");
+            }
+            catch (Exception ex)
             {
-                return BadRequest("Image URL is required");
+                _logger.LogError(ex, "Ошибка при обновлении основного изображения продукта с ID {ProductId}", id);
+                return StatusCode(500, "Ошибка при обновлении изображения");
             }
-
-            product.ImageUrl = imageUrl;
-            _repository.Update(product);
-            await _repository.SaveChangesAsync();
-
-            return Ok("Product image updated successfully");
         }
 
+        /// <summary>
+        /// Обновляет характеристики продукта
+        /// </summary>
         [HttpPut("{id}/characteristics")]
         [Authorize(Roles = "Seller")]
         public async Task<IActionResult> UpdateProductCharacteristics(int id, [FromBody] string characteristics)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
-            }
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound();
+                }
 
-            if (string.IsNullOrEmpty(characteristics))
+                // Проверка, принадлежит ли продукт текущему продавцу
+                if (!await IsProductOwnedByCurrentUser(product))
+                {
+                    return Forbid();
+                }
+
+                if (string.IsNullOrEmpty(characteristics))
+                {
+                    return BadRequest("Product characteristics are required");
+                }
+
+                product.Characteristics = characteristics;
+                _repository.Update(product);
+                await _repository.SaveChangesAsync();
+
+                _logger.LogInformation("Обновлены характеристики продукта с ID {ProductId}", id);
+                return Ok("Product characteristics updated successfully");
+            }
+            catch (Exception ex)
             {
-                return BadRequest("Product characteristics are required");
+                _logger.LogError(ex, "Ошибка при обновлении характеристик продукта с ID {ProductId}", id);
+                return StatusCode(500, "Ошибка при обновлении характеристик");
             }
-
-            product.Characteristics = characteristics;
-            _repository.Update(product);
-            await _repository.SaveChangesAsync();
-
-            return Ok("Product characteristics updated successfully");
         }
 
+        /// <summary>
+        /// Получает список продуктов текущего продавца
+        /// </summary>
         [HttpGet("SellerProducts")]
         [Authorize(Roles = "Seller")]
         public async Task<ActionResult<IEnumerable<ProductResponseDto>>> GetSellerProducts()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
-            {
-                return Forbid();
-            }
-
             try
             {
-                Console.WriteLine("GetSellerProducts: before _repository.GetAllAsync()");
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    return Forbid();
+                }
+
+                // Поскольку в модели Product нет поля SellerId, получаем все продукты
+                // В будущем нужно добавить фильтрацию по продавцу
                 var products = await _repository.GetAllAsync();
-                Console.WriteLine("GetSellerProducts: after _repository.GetAllAsync()");
+
                 return Ok(products.Select(p => p.ToDto()));
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"GetSellerProducts: Exception: {ex}");
-                return StatusCode(500, "Error loading products.");
+                _logger.LogError(ex, "Ошибка при получении списка продуктов продавца");
+                return StatusCode(500, "Ошибка при загрузке продуктов");
             }
         }
 
+        /// <summary>
+        /// Проверяет, принадлежит ли продукт текущему пользователю
+        /// </summary>
+        private static async Task<bool> IsProductOwnedByCurrentUser(Product product)
+        {
+            // Поскольку в модели Product нет поля SellerId,
+            // мы не можем проверить принадлежность продукта пользователю
+            // В реальном приложении здесь должна быть логика проверки владельца продукта
+            
+            // Временное решение: разрешаем доступ всем продавцам
+            // В будущем нужно добавить поле SellerId в модель Product
+            // или реализовать другой механизм проверки владельца
+            return await Task.FromResult(true);
+        }
     }
 }

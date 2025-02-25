@@ -26,7 +26,12 @@ namespace B2B_API.Controllers
         [HttpPost("register")]
         public async Task<ActionResult<User>> Register(RegisterModel model)
         {
-            if (_context.Users != null && await _context.Users.AnyAsync(u => u.Email == model.Email))
+            // Явная проверка на null для DbSet<User> Users, чтобы избежать потенциальных исключений NullReferenceException.
+            if (_context.Users == null)
+            {
+                return StatusCode(500, "Database context не настроен корректно."); // Возвращаем 500, если Users DbSet null.
+            }
+            if (await _context.Users.AnyAsync(u => u.Email == model.Email))
             {
                 return BadRequest("Email already exists");
             }
@@ -73,7 +78,12 @@ namespace B2B_API.Controllers
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(LoginModel loginModel)
         {
-            var user = await _context.Users?.FirstOrDefaultAsync(u => u.Email == loginModel.Email);
+            // Явная проверка на null для DbSet<User> Users, чтобы избежать потенциальных исключений NullReferenceException.
+            if (_context.Users == null)
+            {
+                return StatusCode(500, "Database context не настроен корректно."); // Возвращаем 500, если Users DbSet null.
+            }
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginModel.Email);
             if (user == null)
             {
                 return Unauthorized("Неверный email или пароль");

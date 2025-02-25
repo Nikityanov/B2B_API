@@ -13,6 +13,7 @@ namespace B2B_API.Models.DTO
 
         public string? PriceListType { get; set; }
         public string? Currency { get; set; } = "BYN"; // Default value
+        public List<int>? AllowedBuyers { get; set; }
     }
 
     public class PriceListUpdateDto
@@ -30,6 +31,7 @@ namespace B2B_API.Models.DTO
         public string? PriceListType { get; set; }
         [RegularExpression(@"^[A-Z]{3}$", ErrorMessage = "Currency must be a 3-letter ISO 4217 currency code")]
         public string? Currency { get; set; }
+        public List<int>? AllowedBuyers { get; set; }
     }
 
     public class PriceListResponseDto

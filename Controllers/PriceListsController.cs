@@ -30,22 +30,21 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             var userRoleClaim = User.FindFirst(ClaimTypes.Role);
 
-            // int userId = 0; // Duplicate declaration removed
             string? userRole = userRoleClaim?.Value;
 
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
 
             var priceListsDbSet = _context.PriceLists;
             if (priceListsDbSet == null)
             {
-                return Ok(new List<PriceListResponseDto>()); // Return empty list if PriceLists is null
+                return Ok(new List<PriceListResponseDto>());
             }
             var query = priceListsDbSet
                 .Include(p => p.Seller)
-                .Include(p => p.AllowedBuyers) // Возможно, здесь была проблема с null
+                .Include(p => p.AllowedBuyers)
                 .Include(p => p.Products)
                     .ThenInclude(pp => pp.Product)
                 .AsQueryable();
@@ -69,18 +68,16 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             var userRoleClaim = User.FindFirst(ClaimTypes.Role);
 
-            // int userId = 0; // Duplicate declaration removed
             string? userRole = userRoleClaim?.Value;
-
 
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
 
             if (_context.PriceLists == null)
             {
-                return NotFound("PriceLists DbSet is null"); // Handle null PriceLists DbSet
+                return NotFound("PriceLists DbSet is null");
             }
             var priceList = await _context.PriceLists
                 .Include(p => p.Seller)
@@ -113,7 +110,7 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
 
             if (_context.Users == null)
@@ -123,21 +120,22 @@ namespace B2B_API.Controllers
             var seller = await _context.Users.FindAsync(userId);
             if (seller == null)
             {
-                return NotFound("Seller not found"); // Продавец не найден
+                return NotFound("Seller not found");
             }
 
-            // Corrected ToEntity call with positional arguments:
             var priceList = createDto.ToEntity(userId, seller);
-            // priceList.SellerId = userId; // redundant, but harmless
+
+            if (createDto.AllowedBuyers != null && createDto.AllowedBuyers.Any())
+            {
+                var allowedBuyers = await _context.Users
+                    .Where(u => createDto.AllowedBuyers.Contains(u.Id))
+                    .ToListAsync();
+                priceList.AllowedBuyers = allowedBuyers;
+            }
 
             await _repository.AddAsync(priceList);
             await _repository.SaveChangesAsync();
 
-            // Загружаем связанные данные для ответа
-            if (_context.PriceLists == null)
-            {
-                return Problem("PriceLists DbSet is null", statusCode: 500);
-            }
             priceList = await _context.PriceLists
                 .Include(p => p.Seller)
                 .Include(p => p.AllowedBuyers)
@@ -147,7 +145,7 @@ namespace B2B_API.Controllers
 
             if (priceList == null)
             {
-                return Problem("Price list creation failed", statusCode: 500); // Или BadRequest, в зависимости от логики
+                return Problem("Price list creation failed", statusCode: 500);
             }
 
             return CreatedAtAction(
@@ -168,7 +166,7 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
             var priceList = await _repository.GetByIdAsync(id);
 
@@ -182,7 +180,15 @@ namespace B2B_API.Controllers
                 return Forbid();
             }
 
-            priceList.UpdateFromDto(updateDto); // Update existing fields
+            priceList.UpdateFromDto(updateDto);
+
+            if (updateDto.AllowedBuyers != null && updateDto.AllowedBuyers.Any())
+            {
+                var allowedBuyers = await _context.Users
+                    .Where(u => updateDto.AllowedBuyers.Contains(u.Id))
+                    .ToListAsync();
+                priceList.AllowedBuyers = allowedBuyers;
+            }
 
             _repository.Update(priceList);
             await _repository.SaveChangesAsync();
@@ -197,7 +203,7 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
             var priceList = await _repository.GetByIdAsync(id);
 
@@ -224,7 +230,7 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
         
             if (_context.PriceListProducts == null)
@@ -252,8 +258,8 @@ namespace B2B_API.Controllers
                 PriceListId = id,
                 ProductId = createDto.ProductId,
                 SpecialPrice = createDto.SpecialPrice,
-                PriceList = priceList, // Assign PriceList entity
-                Product = product      // Assign Product entity
+                PriceList = priceList,
+                Product = product
             };
 
             if (_context.PriceListProducts == null)
@@ -273,7 +279,7 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
             var priceList = await _repository.GetByIdAsync(id);
             
@@ -311,7 +317,7 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
             if (_context.PriceLists == null)
             {
@@ -354,7 +360,7 @@ namespace B2B_API.Controllers
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
             {
-                return Forbid(); // Или BadRequest("Invalid user ID");
+                return Forbid();
             }
             if (_context.PriceLists == null)
             {
