@@ -136,6 +136,9 @@ msbuild.log
 *.mdf
 *.ldf
 *.config.example
+*.db
+*.db-shm
+*.db-wal
 *.sample
 *.template
 *.example.config
@@ -2236,4 +2239,5 @@ msbuild.log
 *.mwb.vmb
 *.mwb.vmc
 *.mwb.vmd>Debug/
+b2b.db
 b2b.db
