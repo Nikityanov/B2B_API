@@ -55,7 +55,12 @@ namespace B2B_API.Services
             await _repository.AddAsync(order);
             await _repository.SaveChangesAsync();
 
-            return await GetOrderAsync(order.Id); // Return order with related entities
+            var createdOrder = await GetOrderAsync(order.Id); // Return order with related entities
+            if (createdOrder == null)
+            {
+                throw new InvalidOperationException("Failed to retrieve created order.");
+            }
+            return createdOrder;
         }
 
         public async Task UpdateOrderAsync(Order order, OrderUpdateDto updateDto)
@@ -82,41 +87,25 @@ namespace B2B_API.Services
             await _repository.SaveChangesAsync();
         }
 
-        public async Task<Order> GetOrderAsync(int id)
+        public async Task<Order?> GetOrderAsync(int id)
         {
-            if (_context.Orders == null)
-            {
-                throw new InvalidOperationException("Orders DbSet is null");
-            }
-            var order = await _context.Orders
-                .Include(o => o.Customer)
-                .Include(o => o.OrderItems)
-                    .ThenInclude(item => item.Product)
-                .FirstOrDefaultAsync(o => o.Id == id);
-            
-            if (order == null)
-            {
-                throw new InvalidOperationException($"Order with id {id} not found");
-            }
-            return order;
+            return await _repository.GetAsync(id,
+                o => o.Customer,
+                o => o.OrderItems,
+                o => o.OrderItems!.Select(item => item.Product));
         }
 
         public async Task<(IEnumerable<Order>, int)> GetOrdersAsync(int page, int pageSize)
         {
             var (orders, totalCount) = await _repository.GetPagedAsync(page, pageSize);
 
-            // Eagerly load related entities for each order
-            foreach (var order in orders)
-            {
-                await _context.Entry(order)
-                    .Reference(o => o.Customer)
-                    .LoadAsync();
-                await _context.Entry(order)
-                    .Collection(o => o.OrderItems)
-                    .Query()
-                        .Include(item => item.Product)
-                    .LoadAsync();
-            }
+            // Eagerly load related entities
+            orders = await _context.Orders
+                .Include(o => o.Customer)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(item => item.Product)
+                .Where(o => orders.Contains(o)) // Filter to only include paged orders
+                .ToListAsync();
 
             return (orders, totalCount);
         }

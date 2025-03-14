@@ -175,13 +175,12 @@ namespace B2B_API
 
         private static string GetJwtSecretKey(WebApplicationBuilder builder)
         {
-            // Обновленный порядок с учетом переменных окружения
-            var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
-                ?? builder.Configuration["JwtSettings:SecretKey"];
+            // Получаем секретный ключ из конфигурации
+            var secretKey = builder.Configuration["JwtSettings:SecretKey"];
 
-            if (secretKey == null)
+            if (string.IsNullOrEmpty(secretKey))
             {
-                throw new InvalidOperationException("JWT secret key is not configured.");
+                throw new InvalidOperationException("JWT secret key is not configured in JwtSettings.");
             }
 
             JwtHelper.ValidateSecretKeyLength(secretKey); // Вызываем функцию валидации через класс JwtHelper

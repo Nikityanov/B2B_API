@@ -18,8 +18,8 @@ namespace B2B_API.Services
         public string GenerateToken(User user)
         {
             var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
-                Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
-                ?? throw new InvalidOperationException("JWT_SECRET_KEY environment variable is not set")));
+                _configuration["JwtSettings:SecretKey"]
+                ?? throw new InvalidOperationException("JWT SecretKey is not configured in JwtSettings")));
             var signingCredentials = new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256);
 
             var claims = new List<Claim>

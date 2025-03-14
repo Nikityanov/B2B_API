@@ -14,8 +14,8 @@ namespace B2B_API.Data
         public DbSet<Product>? Products { get; set; }
         public DbSet<PriceList>? PriceLists { get; set; }
         public DbSet<PriceListProduct>? PriceListProducts { get; set; }
-        public DbSet<Order>? Orders { get; set; } // Добавлено DbSet для Order
-        public DbSet<OrderItem>? OrderItems { get; set; } // Добавлено DbSet для OrderItem
+        public virtual DbSet<Order>? Orders { get; set; } // Добавлено DbSet для Order, virtual
+        public virtual DbSet<OrderItem>? OrderItems { get; set; } // Добавлено DbSet для OrderItem, virtual
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

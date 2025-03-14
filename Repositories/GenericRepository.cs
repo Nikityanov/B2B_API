@@ -72,5 +72,17 @@ namespace B2B_API.Repositories
 
             return (items, totalCount);
         }
+
+        public async Task<T?> GetAsync(int id, params Expression<Func<T, object>>[] includes)
+        {
+            IQueryable<T> query = _dbSet;
+
+            foreach (var include in includes)
+            {
+                query = query.Include(include);
+            }
+
+            return await query.FirstOrDefaultAsync(e => EF.Property<int>(e, "Id") == id);
+        }
     }
 }
