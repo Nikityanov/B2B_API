@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using B2B_API.Models;
+using B2B_API.Domain.Entities;
 
 namespace B2B_API.Data
 {
@@ -10,12 +10,16 @@ namespace B2B_API.Data
         {
         }
 
-        public DbSet<User>? Users { get; set; }
-        public DbSet<Product>? Products { get; set; }
-        public DbSet<PriceList>? PriceLists { get; set; }
-        public DbSet<PriceListProduct>? PriceListProducts { get; set; }
-        public virtual DbSet<Order>? Orders { get; set; } // Добавлено DbSet для Order, virtual
-        public virtual DbSet<OrderItem>? OrderItems { get; set; } // Добавлено DbSet для OrderItem, virtual
+        // Доменные сущности
+        public DbSet<User> Users { get; set; } = null!;
+        public DbSet<Product> Products { get; set; } = null!;
+        public DbSet<Category> Categories { get; set; } = null!;
+        public DbSet<Order> Orders { get; set; } = null!;
+        public DbSet<OrderItem> OrderItems { get; set; } = null!;
+        public DbSet<PriceList> PriceLists { get; set; } = null!;
+        public DbSet<PriceListProduct> PriceListProducts { get; set; } = null!;
+
+        // Все DbSet определены выше через доменные сущности
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -40,7 +44,7 @@ namespace B2B_API.Data
             // Настройка связей для PriceListProduct
             modelBuilder.Entity<PriceListProduct>()
                 .HasOne(plp => plp.PriceList)
-                .WithMany(pl => pl.Products)
+                .WithMany(pl => pl.PriceListProducts)
                 .HasForeignKey(plp => plp.PriceListId);
 
             modelBuilder.Entity<PriceListProduct>()

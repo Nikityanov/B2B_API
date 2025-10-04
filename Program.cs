@@ -4,10 +4,16 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using B2B_API.Data;
-using B2B_API.Interfaces;
-using B2B_API.Repositories;
-using B2B_API.Services;
 using B2B_API.Models.Auth;
+using MediatR;
+using FluentResults;
+using B2B_API.API.Middleware;
+using B2B_API.Domain.Interfaces;
+using B2B_API.Infrastructure.Persistence;
+using B2B_API.Infrastructure.External;
+using B2B_API.Infrastructure.Repositories;
+using B2B_API.CrossCutting.Validation;
+using B2B_API.Domain.Entities;
 
 namespace B2B_API
 {
@@ -33,19 +39,56 @@ namespace B2B_API
 
             // Add services to the container.
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+            Console.WriteLine("Начало процесса регистрации сервисов в DI контейнере...");
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+            Console.WriteLine("Базовые сервисы OpenAPI зарегистрированы");
 
             // Добавляем контекст базы данных
+            Console.WriteLine("Регистрация контекста базы данных...");
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+            Console.WriteLine("Контекст базы данных зарегистрирован");
 
-            // Регистрируем репозитории и сервисы
-            builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            // Регистрируем инфраструктуру
+            builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
             builder.Services.AddScoped<JwtService>();
-            builder.Services.AddScoped<CategoryService>();
+
+            // Регистрируем репозитории
+            Console.WriteLine("Регистрация репозиториев в DI контейнере...");
+            builder.Services.AddScoped<IRepository<Category>, EfRepository<Category>>();
+            builder.Services.AddScoped<IRepository<Product>, EfRepository<Product>>();
+            builder.Services.AddScoped<IRepository<User>, EfRepository<User>>();
+            builder.Services.AddScoped<IRepository<Order>, EfRepository<Order>>();
+            builder.Services.AddScoped<IRepository<OrderItem>, EfRepository<OrderItem>>();
+            builder.Services.AddScoped<IRepository<PriceList>, EfRepository<PriceList>>();
+            builder.Services.AddScoped<IRepository<PriceListProduct>, EfRepository<PriceListProduct>>();
+            Console.WriteLine("Регистрация репозиториев завершена");
+
+            // Регистрируем валидаторы команд
+            Console.WriteLine("Регистрация валидаторов команд в DI контейнере...");
+            builder.Services.AddScoped<CreateCategoryCommandValidator>();
+            builder.Services.AddScoped<CreateProductCommandValidator>();
+            builder.Services.AddScoped<CreateUserCommandValidator>();
+            builder.Services.AddScoped<CreateOrderCommandValidator>();
+            builder.Services.AddScoped<CreatePriceListCommandValidator>();
+            builder.Services.AddScoped<AddOrderItemCommandValidator>();
+            builder.Services.AddScoped<AddProductToPriceListCommandValidator>();
+            builder.Services.AddScoped<DeleteOrderCommandValidator>();
+            builder.Services.AddScoped<DeletePriceListCommandValidator>();
+            builder.Services.AddScoped<RemoveProductFromPriceListCommandValidator>();
+            builder.Services.AddScoped<UpdateOrderCommandValidator>();
+            builder.Services.AddScoped<UpdatePriceListCommandValidator>();
+            builder.Services.AddScoped<UpdateProductPriceCommandValidator>();
+            Console.WriteLine("Регистрация валидаторов команд завершена");
+
+            // Регистрируем MediatR для CQRS паттерна
+            Console.WriteLine("Регистрация MediatR...");
+            builder.Services.AddMediatR(typeof(Program).Assembly);
+            Console.WriteLine("MediatR зарегистрирован");
 
             // Настройка аутентификации
+            Console.WriteLine("Настройка аутентификации JWT...");
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
@@ -65,9 +108,11 @@ namespace B2B_API
                 });
 
             // Настройка Swagger с поддержкой JWT
+            Console.WriteLine("Настройка контроллеров и авторизации...");
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddAuthorization();
             builder.Services.AddControllers();
+            Console.WriteLine("Контроллеры и авторизация настроены");
             builder.Services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo
@@ -119,7 +164,11 @@ namespace B2B_API
                 .ValidateOnStart();
 
             // Добавляем CORS
+            Console.WriteLine("Регистрация CORS...");
             builder.Services.AddCors();
+            Console.WriteLine("CORS зарегистрирован");
+
+            Console.WriteLine("Процесс регистрации сервисов в DI контейнере завершен");
 
             var app = builder.Build();
 
@@ -142,6 +191,9 @@ namespace B2B_API
                 .AllowAnyHeader() // Разрешить все заголовки
                 .AllowCredentials() // Разрешить передачу учетных данных
                 );
+
+            // Добавляем глобальный обработчик исключений
+            app.UseGlobalExceptionHandler();
 
             // Добавляем middleware аутентификации и авторизации
             app.UseAuthentication();

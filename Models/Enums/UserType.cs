@@ -1,9 +1,12 @@
 namespace B2B_API.Models.Enums
 {
+    /// <summary>
+    /// Типы пользователей в системе
+    /// </summary>
     public enum UserType
     {
-        Organization,
-        Individual,
-        Customer
+        Buyer = 1,  // Покупатель
+        Seller = 2, // Продавец
+        Admin = 3   // Администратор
     }
 }
